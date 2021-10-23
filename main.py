@@ -3,19 +3,16 @@ from textual.app import App
 
 from widgets.box import TextBox, InfoBox, GutterBox
 from textual import events
-from enum import Enum, auto
 
-class Classification(Enum):
-    CORRECT = auto()
-    INCORRECT = auto()
 
+full_text =   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
 
 class SrsTyperApp(App):
     """Terminal application for personalized typing practice based on the Spaced Repetition Sysem (SRS)."""
 
-    async def on_load(self, event: events.Load) -> None:
+    async def on_load(self, _: events.Load) -> None:
 
-        self.full_text =  "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
+        self.full_text = full_text
         self.formatted_text = ""
         self.formatted_input = ""
 
@@ -57,7 +54,7 @@ class SrsTyperApp(App):
         )
 
 
-    async def on_key(self, event):
+    async def on_key(self, event) -> None:
 
         current_char = self.full_text[self.current_location]
 
@@ -67,7 +64,7 @@ class SrsTyperApp(App):
         if current_input == current_char:
             # correct input
             self.save_entry(current_input, current_char, surround_width=10)
-            formatted_char = self.surround_with_style(self.correct_style, current_char)
+            formatted_char = surround_with_style(self.correct_style, current_char)
             self.delete_locations.append(max(len(self.formatted_input), 0))
             self.formatted_input += formatted_char
             self.current_location += 1
@@ -86,7 +83,7 @@ class SrsTyperApp(App):
             self.save_entry(current_input, current_char, surround_width=10)
             if current_char.isspace():
                 current_char = "_"
-            formatted_char = self.surround_with_style(self.incorrect_style, current_char)
+            formatted_char = surround_with_style(self.incorrect_style, current_char)
             self.delete_locations.append(max(len(self.formatted_input), 0))
             self.formatted_input += formatted_char
             self.current_location += 1
@@ -98,18 +95,14 @@ class SrsTyperApp(App):
         await self.text.update(self.formatted_text)
         await self.gutter.update(f"<<{current_char}>>    <<{current_input}>>")
 
-    def surround_with_style(self, style: List[str], text: str):
-        """Take a text and surround it with a rich text style like [bold red] text [/bold red], stored in a list."""
-        return style[0] + text + style[1]
-
-    def format_text(self):
+    def format_text(self) -> str:
         """Return a renderable string based on the previous input and the remaining text."""
         return self.formatted_input \
-               + self.surround_with_style(self.current_style, self.full_text[self.current_location]) \
+               + surround_with_style(self.current_style, self.full_text[self.current_location]) \
                + self.full_text[self.current_location + 1:]
 
 
-    def save_entry(self, current_input: str, current_char: str, surround_width):
+    def save_entry(self, current_input: str, current_char: str, surround_width) -> None:
         """Save information about what as put in and what was expected. Also includes the context based on the surrounding text."""
         self.entries.append(dict(
                     input=current_input,
@@ -117,6 +110,9 @@ class SrsTyperApp(App):
                     surrounding=self.full_text[max(self.current_location-int(surround_width/2), 0):min(self.current_location+int(surround_width/2), len(self.full_text))],
                     ))
 
+def surround_with_style(style: List[str], text: str) -> str:
+    """Take a text and surround it with a rich text style like [bold red] text [/bold red], stored in a list."""
+    return style[0] + text + style[1]
 
 SrsTyperApp().run(log="textual.log")
 

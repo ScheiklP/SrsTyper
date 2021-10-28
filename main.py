@@ -1,4 +1,5 @@
-from typing import List
+import pandas as pd
+from typing import List, Tuple
 from time import time
 
 from textual.app import App
@@ -6,18 +7,23 @@ from textual import events
 
 from widgets.box import TextBox, InfoBox, GutterBox
 
+full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
+# full_text = "Lorem ipsum"
 
-full_text =   "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
 
 class SrsTyperApp(App):
     """Terminal application for personalized typing practice based on the Spaced Repetition Sysem (SRS)."""
-
     async def on_load(self, _: events.Load) -> None:
         """Calleb before entering application mode."""
 
         # Raw text that is to be typed in the session.
         self.full_text = full_text
         self.text_length = len(self.full_text)
+
+        # Words of the text and indices to map the current location in the text to a word.
+        # Both are used to save the word in which typos occur.
+        self.word_list, self.word_indices = index_text_to_words(self.full_text)
+
         # Text on the left side of the curser (already typed), with formatting for rich rendering
         self.formatted_input = ""
         # Full text, with formatting for rich rendering
@@ -31,7 +37,7 @@ class SrsTyperApp(App):
         # Current location in the full text
         self.current_location = 0
 
-        # The formatted text will contain information about rendering like [bold green]. 
+        # The formatted text will contain information about rendering like [bold green].
         # To correctly remove characters from the formatted text, we have to remember where in the string a new text character starts.
         # To delete more than one character in sequence, we keep a list of these locations, and pop off from the end.
         self.delete_locations = []
@@ -44,7 +50,6 @@ class SrsTyperApp(App):
         self.misses = 0
 
         await self.bind("escape", "quit", "Quit")
-
 
     async def on_mount(self) -> None:
         """Called when application mode is ready."""
@@ -72,8 +77,7 @@ class SrsTyperApp(App):
             gutter_area=self.gutter,
         )
 
-
-    async def on_key(self, event) -> None:
+    async def on_key(self, event: events.Key) -> None:
         """Called when a key is pressed."""
 
         current_char = self.full_text[self.current_location]
@@ -90,18 +94,20 @@ class SrsTyperApp(App):
             self.formatted_input = self.formatted_input[:delete_location]
 
         else:
-            self.save_entry(current_input, current_char, surround_width=10)
+            self.save_entry(current_input, current_char)
 
             if current_input == current_char:
                 # correct input
-                formatted_char = surround_with_style(self.correct_style, current_char)
+                formatted_char = surround_with_style(self.correct_style,
+                                                     current_char)
                 self.hits += 1
             else:
                 # incorrect input
                 if current_char.isspace():
                     # since we cannot color in a space, we replace it with an underscore
                     current_char = "_"
-                formatted_char = surround_with_style(self.incorrect_style, current_char)
+                formatted_char = surround_with_style(self.incorrect_style,
+                                                     current_char)
                 self.misses += 1
 
             # new location to jump to, when deleting text is the current lenght of the text, before adding the new formatted char
@@ -114,10 +120,14 @@ class SrsTyperApp(App):
         await self.text.update(self.formatted_text)
         await self.gutter.update(f"<<{current_char}>>    <<{current_input}>>")
         await self.info.update(
-                accuracy=self.get_accuracy(),
-                speed=self.get_speed(),
-                progress=self.get_progress(),
-                )
+            accuracy=self.get_accuracy(),
+            speed=self.get_speed(),
+            progress=self.get_progress(),
+        )
+
+        if self.current_location >= self.text_length:
+            await self.exit()
+
 
     def assemble_formatted_text(self) -> str:
         """Return a renderable string based on the previous input and the remaining text."""
@@ -128,37 +138,65 @@ class SrsTyperApp(App):
         except IndexError:
             return self.formatted_input
 
-
-    def save_entry(self, current_input: str, current_char: str, surround_width) -> None:
-        """Save information about what as put in and what was expected. Also includes the context based on the surrounding text."""
-        self.entries.append(dict(
-                    input=current_input,
-                    text=current_char,
-                    surrounding=self.full_text[max(self.current_location-int(surround_width/2), 0):min(self.current_location+int(surround_width/2), len(self.full_text))],
-                    time=time(),
-                    ))
+    def save_entry(
+        self,
+        current_input: str,
+        current_char: str,
+    ) -> None:
+        """Save information about what as put in, what was expected, the current word, and a time stamp."""
+        self.entries.append(
+            dict(
+                input=current_input,
+                text=current_char,
+                correct = current_input == current_char,
+                word=self.word_list[self.word_indices[self.current_location]],
+                time=time(),
+            ))
 
     def get_progress(self) -> str:
+        """Percentage of typed text."""
         return f"{(self.current_location/self.text_length)*100:.1f}%"
 
     def get_accuracy(self) -> str:
+        """Percentage of hits in typed text."""
         try:
             return f"{(self.hits/(self.hits+self.misses))*100:.1f}%"
         except ZeroDivisionError:
             return "100%"
 
     def get_speed(self) -> str:
+        """Characters per minute since start."""
         try:
             start = self.entries[0]["time"]
             return f"{int(self.current_location/(time() - start)*60)} cpm"
         except IndexError:
             return "0 cpm"
 
+    async def exit(self) -> None:
+        """What to do, when all text is typed."""
+        df = pd.DataFrame(self.entries)
+        df.to_csv("database.csv")
+        await self.shutdown()
 
 
 def surround_with_style(style: List[str], text: str) -> str:
     """Take a text and surround it with a rich text style like [bold red] text [/bold red], stored in a list."""
     return style[0] + text + style[1]
 
-SrsTyperApp().run(log="textual.log")
 
+def index_text_to_words(text: str) -> Tuple[List[str], List[int]]:
+    """Index each position in the text with its corresponding word (text seperated by spaces)"""
+    word_list = text.split(" ")
+    word_indices = []
+    counter = 0
+    for char in full_text:
+        word_indices.append(counter)
+        if char == " ":
+            counter += 1
+    return word_list, word_indices
+
+
+if __name__ == "__main__":
+
+    SrsTyperApp().run(log="textual.log")
+    print(index_text_to_words(full_text))

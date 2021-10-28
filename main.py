@@ -1,4 +1,4 @@
-import pandas as pd
+import csv
 from typing import List, Tuple
 from time import time
 
@@ -128,7 +128,6 @@ class SrsTyperApp(App):
         if self.current_location >= self.text_length:
             await self.exit()
 
-
     def assemble_formatted_text(self) -> str:
         """Return a renderable string based on the previous input and the remaining text."""
         try:
@@ -148,7 +147,7 @@ class SrsTyperApp(App):
             dict(
                 input=current_input,
                 text=current_char,
-                correct = current_input == current_char,
+                correct=current_input == current_char,
                 word=self.word_list[self.word_indices[self.current_location]],
                 time=time(),
             ))
@@ -174,8 +173,10 @@ class SrsTyperApp(App):
 
     async def exit(self) -> None:
         """What to do, when all text is typed."""
-        df = pd.DataFrame(self.entries)
-        df.to_csv("database.csv")
+        with open("database.csv", "w", newline="") as output_file:
+            dict_writer = csv.DictWriter(output_file, self.entries[0].keys())
+            dict_writer.writeheader()
+            dict_writer.writerows(self.entries)
         await self.shutdown()
 
 

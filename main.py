@@ -142,13 +142,23 @@ class SrsTyperApp(App):
         current_input: str,
         current_char: str,
     ) -> None:
-        """Save information about what as put in, what was expected, the current word, and a time stamp."""
+        """Save information about what as put in, what was expected, the current word, the characters location in the word, and a time stamp."""
+
+        current_word_index = self.word_indices[self.current_location]
+        current_search_location = self.current_location
+
+        while self.word_indices[current_search_location] == current_word_index:
+            current_search_location -= 1
+
+        location_in_word = self.current_location - current_search_location - 1
+
         self.entries.append(
             dict(
                 input=current_input,
                 text=current_char,
                 correct=current_input == current_char,
-                word=self.word_list[self.word_indices[self.current_location]],
+                word=self.word_list[current_word_index],
+                location_in_word=location_in_word,
                 time=time(),
             ))
 
@@ -200,4 +210,3 @@ def index_text_to_words(text: str) -> Tuple[List[str], List[int]]:
 if __name__ == "__main__":
 
     SrsTyperApp().run(log="textual.log")
-    print(index_text_to_words(full_text))

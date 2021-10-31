@@ -1,11 +1,12 @@
-import csv
-from typing import List, Tuple
+import pickle
+from typing import List
 from time import time
 
 from textual.app import App
 from textual import events
 
 from widgets.box import TextBox, InfoBox, GutterBox
+from utils.data import DatabaseEntry, index_text_to_words
 
 full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
 # full_text = "Lorem ipsum"
@@ -43,7 +44,7 @@ class SrsTyperApp(App):
         self.delete_locations = []
 
         # A list for storing information about what was typed in which context
-        self.entries = []
+        self.database_entries = []
 
         # Counters to calculate the accuracy
         self.hits = 0
@@ -152,8 +153,8 @@ class SrsTyperApp(App):
 
         location_in_word = self.current_location - current_search_location - 1
 
-        self.entries.append(
-            dict(
+        self.database_entries.append(
+            DatabaseEntry(
                 input=current_input,
                 text=current_char,
                 correct=current_input == current_char,
@@ -176,35 +177,21 @@ class SrsTyperApp(App):
     def get_speed(self) -> str:
         """Characters per minute since start."""
         try:
-            start = self.entries[0]["time"]
+            start = self.database_entries[0].time
             return f"{int(self.current_location/(time() - start)*60)} cpm"
         except IndexError:
             return "0 cpm"
 
     async def exit(self) -> None:
         """What to do, when all text is typed."""
-        with open("database.csv", "w", newline="") as output_file:
-            dict_writer = csv.DictWriter(output_file, self.entries[0].keys())
-            dict_writer.writeheader()
-            dict_writer.writerows(self.entries)
+        with open("database.pkl", "wb") as output_file:
+            pickle.dump(self.database_entries, output_file)
         await self.shutdown()
 
 
 def surround_with_style(style: List[str], text: str) -> str:
     """Take a text and surround it with a rich text style like [bold red] text [/bold red], stored in a list."""
     return style[0] + text + style[1]
-
-
-def index_text_to_words(text: str) -> Tuple[List[str], List[int]]:
-    """Index each position in the text with its corresponding word (text seperated by spaces)"""
-    word_list = text.split(" ")
-    word_indices = []
-    counter = 0
-    for char in full_text:
-        word_indices.append(counter)
-        if char == " ":
-            counter += 1
-    return word_list, word_indices
 
 
 if __name__ == "__main__":

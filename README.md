@@ -8,3 +8,4 @@ A learning command line tool to practice typing.
   * single charactes, but with context of a bi/tri/quadgram (e.g. `e` is fine (for example `she` or `he`, except when found in `the`)
 * should generate new text based on what you did wrong in the past, based on a spaced repetition strategy. More frequent mistakes are introduced more often into new text.
 * also monitor the time stamps to identify slow ngrams
+* create ngrams based on whole words (which words are often typed incorrectly in combination?).

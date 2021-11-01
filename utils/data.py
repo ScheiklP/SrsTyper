@@ -1,8 +1,13 @@
+import pickle
+
+from datetime import datetime
 from typing import List, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
+
 
 @dataclass
-class DatabaseEntry:
+class SessionDatabaseEntry:
     input: str
     text: str
     correct: bool
@@ -10,6 +15,17 @@ class DatabaseEntry:
     location_in_word: int
     time: float
 
+
+@dataclass
+class SessionDatabase:
+    entries: List[SessionDatabaseEntry] = field(default_factory=list)
+    date: str = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+
+def read_database(database_path: Path):
+    """Read and return the database."""
+    with open(str(database_path.absolute()), "rb") as database_file:
+        return pickle.load(database_file)
 
 
 def index_text_to_words(text: str) -> Tuple[List[str], List[int]]:

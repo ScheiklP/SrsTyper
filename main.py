@@ -1,25 +1,33 @@
 import pickle
 from typing import List
 from time import time
+from pathlib import Path
 
 from textual.app import App
 from textual import events
 
 from widgets.box import TextBox, InfoBox, GutterBox
-from utils.data import DatabaseEntry, index_text_to_words
-
-full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
-# full_text = "Lorem ipsum"
+from utils.data import SessionDatabase, SessionDatabaseEntry, index_text_to_words
 
 
 class SrsTyperApp(App):
     """Terminal application for personalized typing practice based on the Spaced Repetition Sysem (SRS)."""
-    async def on_load(self, _: events.Load) -> None:
-        """Calleb before entering application mode."""
+
+    def __init__(self, full_text: str, **kwargs):
 
         # Raw text that is to be typed in the session.
         self.full_text = full_text
-        self.text_length = len(self.full_text)
+        self.text_length = len(full_text)
+
+        super().__init__(**kwargs)
+
+
+    async def on_load(self, _: events.Load) -> None:
+        """Called before entering application mode."""
+
+        self.data_dir = Path("data")
+        if not self.data_dir.is_dir():
+            self.data_dir.mkdir()
 
         # Words of the text and indices to map the current location in the text to a word.
         # Both are used to save the word in which typos occur.
@@ -43,8 +51,8 @@ class SrsTyperApp(App):
         # To delete more than one character in sequence, we keep a list of these locations, and pop off from the end.
         self.delete_locations = []
 
-        # A list for storing information about what was typed in which context
-        self.database_entries = []
+        # A class for storing information about what was typed in which context
+        self.session_database = SessionDatabase()
 
         # Counters to calculate the accuracy
         self.hits = 0
@@ -153,8 +161,8 @@ class SrsTyperApp(App):
 
         location_in_word = self.current_location - current_search_location - 1
 
-        self.database_entries.append(
-            DatabaseEntry(
+        self.session_database.entries.append(
+            SessionDatabaseEntry(
                 input=current_input,
                 text=current_char,
                 correct=current_input == current_char,
@@ -177,15 +185,23 @@ class SrsTyperApp(App):
     def get_speed(self) -> str:
         """Characters per minute since start."""
         try:
-            start = self.database_entries[0].time
+            start = self.session_database.entries[0].time
             return f"{int(self.current_location/(time() - start)*60)} cpm"
         except IndexError:
             return "0 cpm"
 
     async def exit(self) -> None:
-        """What to do, when all text is typed."""
-        with open("database.pkl", "wb") as output_file:
-            pickle.dump(self.database_entries, output_file)
+        """What to do on exit."""
+        database_save_path = self.data_dir / f"{self.session_database.date}_session_database.pkl"
+        with open(str(database_save_path), "wb") as output_file:
+            pickle.dump(self.session_database, output_file)
+        await self.shutdown()
+
+    async def action_quit(self) -> None:
+        """What to do on quit."""
+        database_save_path = self.data_dir / f"{self.session_database.date}_session_database.pkl"
+        with open(str(database_save_path), "wb") as output_file:
+            pickle.dump(self.session_database, output_file)
         await self.shutdown()
 
 
@@ -196,4 +212,6 @@ def surround_with_style(style: List[str], text: str) -> str:
 
 if __name__ == "__main__":
 
-    SrsTyperApp().run(log="textual.log")
+# full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
+    full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+    SrsTyperApp.run(full_text=full_text)

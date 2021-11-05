@@ -144,12 +144,19 @@ def update_srs_database_with_ngrams(
                 srs_database.add_new_ngram(ngram)
 
 
+def geometric_pmf(k: np.ndarray, p: float):
+    return np.multiply(np.power(1 - p, k - 1), p)
+
+
 def sample_ngrams_from_srs_database(srs_database: SRSDataBase, num_ngrams: int, p: float = 0.5) -> List[str]:
     """Select num_ngrams from the SRSDataBase. Distribution of ngrams over bins is sampled from a geometric disribution with success probability of p.
+
+       At least one ngram per bin will be sampled into a list, that is shuffled and reduced to num_ngrams items, before being returned.
 
        If the number of samples from a selected bin is greater than the number of ngrams in the bin, less ngrams will be returned than requested by the function.
        This will happen mainly when the database is still small.
        Samples from the geometric function that exceed the number of bins will be clipped to the highest available bin.
+
 
     """
 
@@ -158,7 +165,12 @@ def sample_ngrams_from_srs_database(srs_database: SRSDataBase, num_ngrams: int, 
     max_bin_num = srs_database.get_max_bin_num()
     selected_bins = np.clip(rng.geometric(p=p, size=num_ngrams) - 1, 0, max_bin_num)
 
+
     bin_counter = Counter(selected_bins)
+
+    for bin_num in range(max_bin_num + 1):
+        if not bin_num in bin_counter.keys():
+            bin_counter[bin_num] = 1
 
     selected_ngrams = []
     for bin_num, ngram_num in bin_counter.items():
@@ -171,7 +183,9 @@ def sample_ngrams_from_srs_database(srs_database: SRSDataBase, num_ngrams: int, 
                     ),
                 )
 
-    return selected_ngrams
+    np.random.shuffle(selected_ngrams)
+
+    return selected_ngrams[:num_ngrams]
 
 
 def write_srs_database(srs_database: SRSDataBase, database_save_path: Path = Path("data") / "srs_database.pkl") -> None:

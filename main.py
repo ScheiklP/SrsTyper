@@ -1,4 +1,5 @@
 import pickle
+import numpy as np
 from typing import List
 from time import time
 from pathlib import Path
@@ -7,7 +8,9 @@ from textual.app import App
 from textual import events
 
 from widgets.box import TextBox, InfoBox, GutterBox
-from utils.data import SessionDatabase, SessionDatabaseEntry, index_text_to_words
+from utils.data import SessionDatabase, SessionDatabaseEntry, index_text_to_words, read_database
+from utils.srs import update_srs_database_from_latest_session, sample_ngrams_from_srs_database
+from utils.ngram import get_words_with_ngrams
 
 
 class SrsTyperApp(App):
@@ -211,7 +214,42 @@ def surround_with_style(style: List[str], text: str) -> str:
 
 
 if __name__ == "__main__":
+    num_words_in_text = 20
+    exploration_percentage = 0.2
+    word_file_path = Path("/usr/share/dict/words")
+    data_dir = Path("data")
+    srs_database_name = "srs_database.pkl"
 
-# full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce sit amet nibh et tellus maximus semper. Proin efficitur est sed erat euismod viverra. Morbi pulvinar eget ligula nec volutpat. Integer vitae quam ac ipsum varius mollis quis at mi. Nulla lacinia vulputate blandit. Nullam ac massa sodales, porttitor purus id, tristique nisi. Aliquam sollicitudin quam pretium diam faucibus, eget fringilla lectus vehicula."
-    full_text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+    update_srs_database_from_latest_session(data_dir=data_dir, srs_database_name=srs_database_name)
+    srs_database = read_database(data_dir / srs_database_name)
+
+    sampled_ngrams = sample_ngrams_from_srs_database(srs_database, int(num_words_in_text*(1-exploration_percentage)))
+
+    assert word_file_path.is_file(), f"Cannot find {word_file_path.absolute()}."
+
+    with open(str(word_file_path.absolute()), "r") as word_file:
+        WORDS = word_file.read().splitlines()
+
+    relevant_words = get_words_with_ngrams(sampled_ngrams, WORDS)
+
+    text_words = []
+
+    while len(sampled_ngrams) > 0:
+        ngram = sampled_ngrams.pop()
+        ngram_word_list = [ngram_word for ngram_word in relevant_words if ngram in ngram_word]
+        # if there is no word matching the ngram, add the ngram itself
+        if len(ngram_word_list) == 0:
+            if len(ngram) > 0:
+                text_words.append(ngram)
+        else:
+            word = np.random.choice(ngram_word_list)
+            text_words.append(word)
+
+    num_missing_words = num_words_in_text - len(text_words)
+    if num_missing_words > 0:
+        text_words.extend(np.random.choice(WORDS, size=num_missing_words))
+
+
+    full_text = " ".join(text_words)
+
     SrsTyperApp.run(full_text=full_text)
